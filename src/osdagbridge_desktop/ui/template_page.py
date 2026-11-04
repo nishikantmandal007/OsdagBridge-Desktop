@@ -1,4 +1,5 @@
 import os, yaml
+import time
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QMenuBar, QSplitter, QSizePolicy, QPushButton, QLineEdit, QComboBox, QFileDialog,
@@ -29,6 +30,7 @@ class LoggerStdoutRedirector:
         self.logger_func = logger_func
         self.original_stdout = original_stdout
         self._buffer = []
+        self._last_emit = 0.0
 
     def write(self, string):
         if self.original_stdout:
@@ -40,15 +42,14 @@ class LoggerStdoutRedirector:
         if not string:
             return
         self._buffer.append(string)
-        if "\n" in string:
-            full_text = "".join(self._buffer)
-            self._buffer = []
-            lines = full_text.split("\n")
-            for line in lines[:-1]:
-                if line.strip():
-                    self.logger_func(line)
-            if lines[-1]:
-                self._buffer.append(lines[-1])
+        # Send lines to the UI in batches: one signal per printed line floods the GUI thread during a design.
+        if "\n" in string and time.monotonic() - self._last_emit >= 0.25:
+            self._last_emit = time.monotonic()
+            lines = "".join(self._buffer).split("\n")
+            self._buffer = [lines[-1]] if lines[-1] else []
+            batch = "\n".join(line for line in lines[:-1] if line.strip())
+            if batch:
+                self.logger_func(batch)
 
     def flush(self):
         if self.original_stdout:
@@ -654,7 +655,6 @@ class CustomWindow(QWidget):
         # print(f"[DEBUG]3d:{self.cad_3d_view_active}")
         # print(f"[DEBUG]top:{self.top_view_active}")
         # print(f"[DEBUG]c/s:{self.cross_section_active}")
-        from pprint import pprint
         self.input_dock._prime_material_inputs()
         # print("\n@@input_dictionary_before (common_design_func):\n")
         # pprint(self.input_dict)
@@ -670,8 +670,6 @@ class CustomWindow(QWidget):
             solve_extend_basic_input_dict(self.input_dict)
             self.input_dock.is_require_field_changed = False
 
-        print("\n@@input_dictionary_after (common_design_func):\n")
-        pprint(self.input_dict)
         
         if trigger == "Design":
 
@@ -747,8 +745,9 @@ class CustomWindow(QWidget):
         import sys
         import traceback
 
-        # Worker is done printing; restore the real stdout.
+        # Worker is done printing; send the last batch and restore the real stdout.
         if getattr(self, "_design_original_stdout", None) is not None:
+            sys.stdout.flush()
             sys.stdout = self._design_original_stdout
             self._design_original_stdout = None
         self._design_running = False

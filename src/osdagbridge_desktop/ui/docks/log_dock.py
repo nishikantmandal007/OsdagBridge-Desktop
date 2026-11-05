@@ -70,6 +70,8 @@ class LogDock(QWidget):
 
     def append_log(self, message, log_level="info"):
         """Append a message to the log display with specified color."""
+        if log_level == "setu":  # the progress window's status, not a log line
+            return
         if log_level == "progress":
             try:
                 pct = int(message.replace("__progress__", ""))

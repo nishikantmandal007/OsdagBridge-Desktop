@@ -1,5 +1,6 @@
 import sys
 import re
+import json
 import queue
 import multiprocessing as mp
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QDialog, QLabel, QProgressBar, QPushButton, QTextEdit, QWidget
@@ -57,7 +58,7 @@ class AnalysisProgressDialog(QDialog):
             | Qt.WindowType.Window
         )
         self.setModal(False)
-        self.setFixedSize(500, 400)
+        self.setFixedSize(520, 540)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
 
@@ -170,6 +171,31 @@ class AnalysisProgressDialog(QDialog):
         """)
         card_layout.addWidget(self._progress)
 
+        # setu analysis: every stage with its time, the running one's count and bar, and the time left (filled by "setu" messages)
+        self._setu_box = QWidget()
+        self._setu_box.setStyleSheet("background: transparent; border: none;")
+        setu_layout = QVBoxLayout(self._setu_box)
+        setu_layout.setContentsMargins(0, 6, 0, 0)
+        setu_layout.setSpacing(4)
+        self._setu_stages = QLabel()
+        self._setu_stages.setTextFormat(Qt.TextFormat.RichText)
+        self._setu_stages.setStyleSheet(f"color: {fg}; font-size: 11px; border: none; background: transparent;")
+        setu_layout.addWidget(self._setu_stages)
+        self._setu_count = QLabel()
+        self._setu_count.setStyleSheet(f"color: {fg}; font-size: 11px; font-weight: 600; border: none; background: transparent;")
+        setu_layout.addWidget(self._setu_count)
+        self._setu_bar = QProgressBar()
+        self._setu_bar.setFixedHeight(4)
+        self._setu_bar.setTextVisible(False)
+        self._setu_bar.setStyleSheet(self._progress.styleSheet())
+        setu_layout.addWidget(self._setu_bar)
+        self._setu_time = QLabel()
+        self._setu_time.setStyleSheet(f"color: {sub_fg}; font-size: 11px; border: none; background: transparent;")
+        setu_layout.addWidget(self._setu_time)
+        self._setu_box.hide()
+        self._sub_fg = sub_fg
+        card_layout.addWidget(self._setu_box)
+
         c.addWidget(self._status_card)
 
         self._log = QTextEdit()
@@ -229,7 +255,49 @@ class AnalysisProgressDialog(QDialog):
             (screen.height() - self.height()) // 2,
         )
 
+    def show_setu_status(self, status: dict) -> None:
+        rows = []
+        for stage in status["stages"]:
+            if stage["state"] == "done":
+                mark, colour, time_text = "&#10003;", "#90AF13", _duration(stage["seconds"])
+            elif stage["state"] == "running":
+                mark, colour, time_text = "&#9654;", "#90AF13", _duration(stage["seconds"])
+            else:
+                mark, colour, time_text = "&#9675;", self._sub_fg, ""
+            weight = "700" if stage["state"] == "running" else "400"
+            rows.append(f'<tr><td style="color:{colour}; padding-right:6px;">{mark}</td>'
+                        f'<td style="font-weight:{weight}; padding-right:16px;">{stage["title"]}</td>'
+                        f'<td style="color:{self._sub_fg};" align="right">{time_text}</td></tr>')
+        self._setu_stages.setText(f'<table cellspacing="0" cellpadding="1">{"".join(rows)}</table>')
+        current = status.get("current")
+        if current and current.get("total"):
+            unit = f' {current["unit"]}' if current.get("unit") else ""
+            self._setu_count.setText(f'{current["title"]}: {current["done"]:,} of {current["total"]:,}{unit}')
+            self._setu_bar.setRange(0, current["total"])
+            self._setu_bar.setValue(current["done"])
+            self._setu_count.show()
+            self._setu_bar.show()
+        else:
+            self._setu_count.setText(current["title"] if current else "")
+            self._setu_count.setVisible(bool(current))
+            self._setu_bar.hide()
+        remaining = status.get("remaining_s")
+        if current is None:
+            left = "setu analysis finished"
+        elif remaining is None:
+            left = "working out the time left…"
+        else:
+            left = _time_left(remaining, status.get("remaining_range_s"))
+        self._setu_time.setText(f'Elapsed {_duration(status["elapsed_s"])}  ·  {left}')
+        self._setu_box.show()
+
     def handle_message(self, msg: str, level: str) -> None:
+        if level == "setu":
+            try:
+                self.show_setu_status(json.loads(msg))
+            except (ValueError, KeyError, TypeError):
+                pass
+            return
         if level == "progress":
             try:
                 pct = int(msg.replace("__progress__", ""))
@@ -300,6 +368,30 @@ class AnalysisProgressDialog(QDialog):
     def closeEvent(self, event):
         self._spinner.stop()
         super().closeEvent(event)
+
+
+# 7 s, 42 s, 3 min 05 s, 1 h 02 min
+def _duration(seconds):
+    seconds = int(round(seconds))
+    if seconds < 60:
+        return f"{seconds} s"
+    if seconds < 3600:
+        return f"{seconds // 60} min {seconds % 60:02d} s"
+    return f"{seconds // 3600} h {seconds % 3600 // 60:02d} min"
+
+
+# the time left, rounded as far as it can honestly be known: to 10 s under five minutes, to the minute beyond;
+# a range while the two ends are a minute or more apart, one figure once they are closer
+def _time_left(seconds, range_s=None):
+    if seconds < 15:
+        return "a few seconds left"
+    if range_s is not None and range_s[1] - range_s[0] >= 60:
+        low, high = max(1, int(range_s[0] // 60)), -(-int(range_s[1]) // 60)
+        if high > low:
+            return f"about {low}–{high} min left"
+    if seconds < 300:
+        return f"about {_duration(round(seconds / 10) * 10)} left"
+    return f"about {round(seconds / 60)} min left"
 
 
 def run_loading_dialog_process(stop_event, is_light_theme=True, label_queue=None, cancel_event=None):

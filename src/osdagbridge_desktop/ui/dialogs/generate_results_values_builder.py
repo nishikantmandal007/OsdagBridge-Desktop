@@ -648,6 +648,13 @@ def resolve_live_load_definitions(output_dict: dict) -> dict | None:
     for label, key in VEHICLE_KEYS:
         rows.append([label, _yn(key)])
 
+    if output_dict.get(KEY_ANALYSIS_ENGINE, ENGINE_SETU) == ENGINE_SETU:
+        rows.append(["── Site Conditions (setu) ──", ""])
+        rows.append(["Road category", _val(output_dict.get(KEY_LL_ROAD_CATEGORY)) if _has(output_dict.get(KEY_LL_ROAD_CATEGORY)) else EMPTY])
+        rows.append(["Congestion (cl. 204.4)", _yn(KEY_LL_CONGESTION)])
+        rows.append(["Crowd load (cl. 206.1)", _yn(KEY_LL_CROWD_LOAD)])
+        rows.append(["Mesh", _val(output_dict.get(KEY_ANALYSIS_MESH)) if _has(output_dict.get(KEY_ANALYSIS_MESH)) else EMPTY])
+
     # Header row — Breaking Load
     rows.append(["── Breaking Load ──", ""])
 
@@ -812,6 +819,10 @@ def resolve_wind_load_parameters(output_dict: dict) -> dict | None:
     avg_exposed_height  = od.get(KEY_WL_AVG_EXPOSED_HEIGHT)
     terrain_type        = od.get(KEY_WL_TERRAIN_TYPE)
     site_topography     = od.get(KEY_WL_SITE_TOPOGRAPHY)
+    if od.get(KEY_ANALYSIS_ENGINE, ENGINE_SETU) == ENGINE_SETU:
+        # setu reads IRC 6 cl. 209 as amended by Amendment 10: the terrain category and the k3 location
+        terrain_type    = od.get(KEY_WL_TERRAIN_CATEGORY)
+        site_topography = od.get(KEY_WL_K3_LOCATION)
 
     # ── Mode-aware helper: show mode label or numeric value ───────────────
     def _mode_val(mode_key, value_key, decimals=2):

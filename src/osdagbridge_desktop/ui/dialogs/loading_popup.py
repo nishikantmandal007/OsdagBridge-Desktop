@@ -266,7 +266,7 @@ class AnalysisProgressDialog(QDialog):
         if not bare:
             return
 
-        if "STAGE" in bare.upper() and ":" in bare:
+        if bare.upper().startswith("STAGE ") and ":" in bare:
             try:
                 parts = bare.split(":", 1)
                 stage_part = parts[0].strip() # e.g. "STAGE 8 COMPLETE [100%]"
@@ -288,6 +288,9 @@ class AnalysisProgressDialog(QDialog):
 
             self._current_stage_text = clean_bare
             self._stage_lbl.setText(f"{clean_bare} [{self._current_pct}%]")
+        elif bare.startswith("setu:") and "deck nodes" not in bare:
+            self._current_stage_text = bare
+            self._stage_lbl.setText(f"{bare} [{self._current_pct}%]")
 
     def _on_stop(self):
         self._cancel_event.set()

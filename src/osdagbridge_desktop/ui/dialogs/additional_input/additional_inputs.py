@@ -3146,8 +3146,17 @@ class AdditionalInputs(QDialog):
             KEY_SL_VERTICAL_COEFF:    str(Av),
         }
 
-    def _compute_wind_values(self, working_input_dict: dict) -> dict:  # compute: derives hourly mean wind speed and pressure from IRC 6 wind inputs
+    def _compute_wind_values(self, working_input_dict: dict) -> dict:  # compute: Vz and Pz as the selected engine works them out (setu: IRC 6 cl. 209 as amended; ospgrillage: IRC 6 Table 12)
         from osdagbridge_core.utils.codes.irc6_2017 import IRC6_2017
+
+        if working_input_dict.get(KEY_ANALYSIS_ENGINE, ENGINE_SETU) == ENGINE_SETU:
+            from osdagbridge_core.core.solvers.setu.analysis_engine import wind_report
+            from osdagbridge_core.core.solvers.setu.bridge_input import wind_site
+            try:
+                computed = wind_report(wind_site(working_input_dict))
+            except (KeyError, TypeError, ValueError):
+                return {}
+            return {key: f"{value:.2f}" for key, value in computed.items()}
 
         basic_wind_speed_str = working_input_dict.get(KEY_WL_BASIC_WIND_SPEED)
         height_str = working_input_dict.get(KEY_WL_AVG_EXPOSED_HEIGHT)

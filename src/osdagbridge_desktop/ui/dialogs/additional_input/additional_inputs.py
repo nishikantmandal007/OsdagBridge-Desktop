@@ -3203,7 +3203,9 @@ class AdditionalInputs(QDialog):
         except ValueError:
             return {}
 
-        res = IRC6_2017.cl_215_2_effective_bridge_temperature(max_temp, min_temp, 'metallic', False)
+        res = IRC6_2017.cl_215_2_effective_bridge_temperature(
+            max_temp, min_temp, 'metallic', bool(working_input_dict.get(KEY_TL_SNOWBOUND))
+        )
         t_min = res.get('T_min', 0)
         t_max = res.get('T_max', 0)
 

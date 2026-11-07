@@ -72,15 +72,14 @@ def _ensure_std_streams():
 
 _ensure_std_streams()
 
-from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QIcon
-from PySide6.QtCore import QFile, QTextStream
-from osdagbridge_desktop.resources import resources_rc
+# Everything below the two calls above runs only from main(): setu's analysis process (and each Windows worker) is started with
+# spawn, which imports this module again, and must not load Qt, the 3D viewer or the UI, nor set up the database, for nothing.
 
 
 def _app_icon():
     """Return the OsdagBridge application icon (the same .ico used for the
     desktop / Start Menu shortcut), or an empty QIcon if it can't be found."""
+    from PySide6.QtGui import QIcon
     try:
         from importlib.resources import files
         ico = files('osdagbridge_desktop.resources').joinpath('osdagbridge.ico')
@@ -202,7 +201,6 @@ def create_sqlite():
             if temp_path.exists():
                 temp_path.unlink()
 
-create_sqlite()
 
 
 def ensure_osdag_core_db():
@@ -257,14 +255,9 @@ def ensure_osdag_core_db():
         print(f"[ERROR] osdag_core database setup failed: {e}")
 
 
-ensure_osdag_core_db()
-
-# Import template_page
-from osdagbridge_desktop.ui.template_page import CustomWindow
-from osdagbridge_core.bridge_types.plate_girder.plategirderbridge import PlateGirderBridge
-
 def load_stylesheet():
     """Load the global QSS stylesheet from resources."""
+    from PySide6.QtCore import QFile, QTextStream
     file = QFile(":/themes/lightstyle.qss")
     if file.open(QFile.ReadOnly | QFile.Text):
         stream = QTextStream(file)
@@ -274,6 +267,15 @@ def load_stylesheet():
     return ""
 
 def main():
+    # The databases first, as before: the UI's imports read them
+    create_sqlite()
+    ensure_osdag_core_db()
+
+    from PySide6.QtWidgets import QApplication
+    from osdagbridge_desktop.resources import resources_rc  # noqa: F401  (registers the Qt resources)
+    from osdagbridge_desktop.ui.template_page import CustomWindow
+    from osdagbridge_core.bridge_types.plate_girder.plategirderbridge import PlateGirderBridge
+
     # Establish the Windows taskbar identity before the QApplication so the
     # taskbar uses our icon, not the host Python interpreter's.
     _set_windows_app_id()

@@ -1455,14 +1455,8 @@ class CustomWindow(QWidget):
                     if dialog.is_preview:
                         # Attempt to auto-open the PDF
                         try:
-                            if sys.platform == "win32":
-                                os.startfile(result.pdf_path)
-                            elif sys.platform == "darwin":
-                                import subprocess
-                                subprocess.run(["open", result.pdf_path], check=False)
-                            else:
-                                import subprocess
-                                subprocess.run(["xdg-open", result.pdf_path], check=False)
+                            from osdagbridge_desktop.os_specific import open_with_default_app
+                            open_with_default_app(result.pdf_path)
                             result.opened = True
                         except Exception as e:
                             print(f"[REPORT-DEBUG] Failed to auto-open PDF: {e}")

@@ -440,9 +440,8 @@ class LoadingDialogManager:
         self.is_light_theme = is_light_theme
         self._dialog = None  # For in-process mode
         
-        # Detect OS - Linux has issues with multiprocess GUI windows
-        import platform
-        self._use_process = platform.system() != "Linux"
+        from osdagbridge_desktop.os_specific import popup_in_child_process
+        self._use_process = popup_in_child_process()
     
     def show(self):
         """Show the loading dialog"""

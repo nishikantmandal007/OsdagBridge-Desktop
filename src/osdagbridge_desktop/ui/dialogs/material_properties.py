@@ -1,7 +1,9 @@
 from PySide6.QtWidgets import (
-    QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
+    QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
 )
-from PySide6.QtCore import Qt
+from contextlib import contextmanager
+
+from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QDoubleValidator
 from pathlib import Path
 import sqlite3
@@ -164,6 +166,18 @@ def deck_material_properties_values():
         (KEY_MATERIAL_DECK_ECM, DISP_MATERIAL_DECK_ECM, TYPE_TEXTBOX, None, True, 'Double Validator'),
         (KEY_MATERIAL_DECK_THERMAL, DISP_MATERIAL_DECK_THERMAL, TYPE_TEXTBOX, None, True, 'Double Validator'),
     ]
+
+# The dialog is parentless, so Qt never deletes it: without this each one (Design reads the materials through one each time) leaves its
+# whole widget tree behind. It is destroyed as soon as the caller is done, as CustomMessageBox.exec does.
+@contextmanager
+def material_dialog(**options):
+    dialog = MaterialPropertiesDialog(**options)
+    try:
+        yield dialog
+    finally:
+        dialog.deleteLater()
+        QApplication.sendPostedEvents(dialog, QEvent.DeferredDelete)
+
 
 class MaterialPropertiesDialog(QDialog):
     def __init__(self, parent=None, read_only=False, selected_material=None, member=None, custom_fields=None):
@@ -407,7 +421,7 @@ class MaterialPropertiesDialog(QDialog):
             line_edit = QLineEdit()
             line_edit.setFixedWidth(242)
             apply_field_style(line_edit)
-            line_edit.setValidator(QDoubleValidator(0.0, 99999.0, 1))
+            line_edit.setValidator(QDoubleValidator(0.0, 99999.0, 1, line_edit))  # parented, so it goes with the field
             line_edit.textEdited.connect(self._handle_user_override)
             if self.is_deck_material and key in (KEY_MATERIAL_DECK_FCK, KEY_MATERIAL_DECK_FCTM):
                 line_edit.textEdited.connect(self._update_custom_material_name)

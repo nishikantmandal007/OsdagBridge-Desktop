@@ -10,7 +10,7 @@ instead of the system's upright pointing hand cursor.
 """
 
 import os
-from osdagbridge_desktop.os_specific import qt_misses_system_cursors
+import platform
 from functools import lru_cache
 
 from PySide6.QtCore import Qt, QRectF
@@ -135,7 +135,7 @@ def should_use_custom_cursor() -> bool:
 
     Returns True on Linux where Qt often fails to use the system cursor theme.
     """
-    return qt_misses_system_cursors()
+    return platform.system() == "Linux"
 
 
 def get_cursor(cursor_shape: Qt.CursorShape) -> QCursor:

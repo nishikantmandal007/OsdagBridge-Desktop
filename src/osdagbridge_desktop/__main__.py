@@ -8,12 +8,69 @@ try:
 except Exception:
     pass
 
-# Windows: the conda environment's DLL folders before any native extension loads, and stdout/stderr under pythonw; each process
-# the app starts runs these on importing this module.
-from osdagbridge_desktop.os_specific import ensure_std_streams, register_conda_dll_directories, set_windows_app_id
 
-register_conda_dll_directories()
-ensure_std_streams()
+def _register_conda_dll_directories():
+    """Add the active conda environment's native DLL folders to the Windows DLL
+    search path before numpy/scipy/openseespy are imported.
+
+    A conda-constructor-installed app launched from its shortcut does not
+    "activate" the environment, so ``<prefix>/Library/bin`` (MKL/OpenBLAS, Qt,
+    etc.) is not on the DLL search path. Native extensions then crash the whole
+    process with ``ERROR_MOD_NOT_FOUND`` (``0xc06d007f``) the first time they
+    delay-load a backend DLL — e.g. ``numpy.linalg.lstsq`` during grillage
+    meshing, which silently closes the window and hangs the loader. No-op on
+    non-Windows and in already-activated environments.
+    """
+    if os.name != "nt":
+        return
+    prefix = sys.prefix
+    candidates = [
+        os.path.join(prefix, "Library", "bin"),
+        os.path.join(prefix, "Library", "mingw-w64", "bin"),
+        os.path.join(prefix, "Library", "usr", "bin"),
+        os.path.join(prefix, "DLLs"),
+        prefix,
+    ]
+    path_entries = os.environ.get("PATH", "").split(os.pathsep)
+    for path in candidates:
+        if not os.path.isdir(path):
+            continue
+        try:
+            os.add_dll_directory(path)
+        except (OSError, AttributeError):
+            pass
+        if path not in path_entries:
+            os.environ["PATH"] = path + os.pathsep + os.environ.get("PATH", "")
+            path_entries.insert(0, path)
+
+
+_register_conda_dll_directories()
+
+
+def _ensure_std_streams():
+    """Guarantee sys.stdout/sys.stderr are writable.
+
+    When launched as a gui-script, Windows runs this under pythonw.exe, which
+    has no console: sys.stdout/sys.stderr are None. The desktop app prints a lot
+    of debug output, and the first print() against None raises AttributeError
+    and kills the app silently. Redirect the missing stream(s) to a log file
+    (falling back to os.devnull) so the GUI can launch without a console window.
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        import tempfile
+        log_path = os.path.join(tempfile.gettempdir(), "osdagbridge.log")
+        stream = open(log_path, "a", buffering=1, encoding="utf-8")
+    except Exception:
+        stream = open(os.devnull, "w")
+    if sys.stdout is None:
+        sys.stdout = stream
+    if sys.stderr is None:
+        sys.stderr = stream
+
+
+_ensure_std_streams()
 
 # Everything below the two calls above runs only from main(): setu's analysis process (and each Windows worker) is started with
 # spawn, which imports this module again, and must not load Qt, the 3D viewer or the UI, nor set up the database, for nothing.
@@ -32,6 +89,20 @@ def _app_icon():
         pass
     return QIcon()
 
+
+def _set_windows_app_id():
+    """Give the app its own Windows taskbar identity so the taskbar shows the
+    OsdagBridge icon instead of the generic Python/pythonw icon. Must run before
+    the main window is shown. No-op on non-Windows."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "Osdag.OsdagBridge.Desktop.1"
+        )
+    except Exception:
+        pass
 
 # Create Intg_osdag.sqlite if not Exist
 def create_sqlite():
@@ -207,7 +278,7 @@ def main():
 
     # Establish the Windows taskbar identity before the QApplication so the
     # taskbar uses our icon, not the host Python interpreter's.
-    set_windows_app_id()
+    _set_windows_app_id()
 
     # Create the Qt application instance
     app = QApplication(sys.argv)

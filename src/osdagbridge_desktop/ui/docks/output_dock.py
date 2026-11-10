@@ -919,10 +919,7 @@ class OutputDock(QWidget):
             combo_analysis.blockSignals(False)
    
     def connect_design_dropdowns(self):
-        """Connect Member and Load Case dropdowns to refresh DCR bars on change. Runs after every design: connect once."""
-        if getattr(self, "_design_dropdowns_connected", False):
-            return
-        self._design_dropdowns_connected = True
+        """Connect Member and Load Case dropdowns to refresh DCR bars on change."""
         for key in (KEY_OUTPUT_DOCK_MEMBER_ID, KEY_OUTPUT_DOCK_LOAD_COMBINATION):
             combo = self._w(key)
             if combo is not None:

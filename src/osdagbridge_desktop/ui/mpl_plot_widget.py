@@ -535,23 +535,7 @@ class MplPlotWidget(QWidget):
         if not loadcase or not force_key:
             return   
         ds = self._ds_all.sel(Loadcase=loadcase)
-
-        # An engine leaves the components it does not solve empty: say so instead of drawing bare girders.
-        if force_key in DISP_MAP:
-            selected = ds["displacements"].sel(Component=force_key[1:].lower())
-        else:
-            selected = ds["forces"].sel(Component=list(FORCE_MAP[force_key]))
-        if bool(selected.isnull().all()):
-            plt.close(self._fig)
-            self._summary_data = {}
-            self._fig = Figure(figsize=(14, 6), facecolor="white")
-            self._attach_figure(self._fig)
-            self._canvas.draw()
-            self._title_overlay.update_text(f"{force_key} is not provided by the selected analysis engine", f"Load Case/Combination : {loadcase}")
-            self._position_title_overlay()
-            QTimer.singleShot(100, self._update_navcube_visibility)
-            return
-
+        
         old_elev, old_azim = None, None
         if hasattr(self, '_fig') and self._fig and self._fig.axes:
             old_ax = self._fig.axes[0]
@@ -976,10 +960,6 @@ class MplPlotWidget(QWidget):
 
     def _attach_figure(self, fig):
         """Install a rebuilt figure using QtAgg's current DPR-aware canvas size."""
-        # plt.close does nothing for a Figure() pyplot never made, and something still holds the old one: free its contents.
-        replaced = self._canvas.figure
-        if replaced is not fig:
-            replaced.clear()
         self._canvas.figure = fig
         fig.set_canvas(self._canvas)
         dpr = float(getattr(self._canvas, "device_pixel_ratio", 1.0))

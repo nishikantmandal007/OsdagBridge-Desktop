@@ -227,6 +227,22 @@ class AdditionalInputs(QDialog):
                     if box:
                         box.setChecked(checked)
                 self._set_enabled(box, not is_setu)
+        # The girder design runs every limit-state check and uses fixed partial factors: with setu those inputs show what
+        # is used and are locked (the report prints them).
+        for key in SETU_ALWAYS_CHECKED:
+            box = self.findChild(QCheckBox, key)
+            if is_setu:
+                self.working_input_dict[key] = True
+                if box:
+                    box.setChecked(True)
+            self._set_enabled(box, not is_setu)
+        for key, value in SETU_FIXED_DESIGN_FACTORS.items():
+            field = self.findChild(QLineEdit, key)
+            if is_setu:
+                self.working_input_dict[key] = value
+                if field:
+                    field.setText(value)
+            self._set_enabled(field, not is_setu)
 
     def _set_enabled(self, widget, enabled: bool):  # setEnabled wrapper used by mode/customize handlers — never re-enables a widget while the dialog is locked
         if widget:

@@ -136,15 +136,19 @@ class SummaryOverlay(QFrame):
         self.text_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         layout.addWidget(self.text_label)
 
-    def update_data(self, summary_data, unit=""):
+    def update_data(self, summary_data, unit="", sag=False):
         title = "Extreme Values Summary"
         if unit:
             title += f" ({unit})"
         hud_text = f"<b>{title}</b><br>" + "-" * 38 + "<br>"
 
+        # sag: a setu deflection, downward negative. Its peak downward value leads as "Max sag", the least as "Least sag",
+        # instead of the signed maximum (about 0) heading the table as "Max".
+        if sag:
+            summary_data = {g: {"max": v["min"], "min": v["max"]} for g, v in summary_data.items()}
         h_girder = "Girder".ljust(8).replace(" ", "&nbsp;")
-        h_max = "Max".rjust(10).replace(" ", "&nbsp;")
-        h_min = "Min".rjust(12).replace(" ", "&nbsp;")
+        h_max = ("Max sag" if sag else "Max").rjust(10).replace(" ", "&nbsp;")
+        h_min = ("Least sag" if sag else "Min").rjust(12).replace(" ", "&nbsp;")
         
         hud_text += f"<b>{h_girder}</b> | <span style='color: #FF4136;'><b>{h_max}</b></span> | <span style='color: #00E5FF;'><b>{h_min}</b></span><br>" + "-" * 38 + "<br>"
 
@@ -605,6 +609,7 @@ class MplPlotWidget(QWidget):
             self._summary_overlay.update_data(
                 self._summary_data,
                 unit=self._value_unit_for_force_key(force_key),
+                sag=force_key in _DEFL_KEYS and force_key == "Dy" and self._ds_all.attrs.get("engine") == "setu",
             )
             if self._is_summary_checked:
                 self._summary_overlay.show()
